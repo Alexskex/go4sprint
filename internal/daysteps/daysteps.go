@@ -3,6 +3,7 @@ package daysteps
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -17,57 +18,66 @@ const (
 	mInKm = 1000
 )
 
-func parsePackage(data string) (int, time.Duration, error) {
-	parts := strings.Split(data, ",")
+var (
+	ErrInvalidArgumentCount = errors.New("expected 2 arguments")
+	ErrZeroSteps            = errors.New("steps must be greater than zero")
+	ErrZeroDuration         = errors.New("duration must be greater than zero")
+)
 
-	if len(parts) != 2 {
-		return 0, 0, errors.New("Неверный формат данных!")
+func parsePackage(data string) (int, time.Duration, error) {
+	dataSlice := strings.Split(data, ",")
+
+	if len(dataSlice) != 2 {
+		return 0, 0, ErrInvalidArgumentCount
 	}
 
-	stepsStr := parts[0]
-	steps, err := strconv.Atoi(stepsStr)
+	steps, err := strconv.Atoi(dataSlice[0])
 	if err != nil {
-		return 0, 0, fmt.Errorf("Не удалось преобразовать количество шагов в число! %w", err)
+		return 0, 0, err
 	}
 
 	if steps <= 0 {
-		return 0, 0, errors.New("Количество шагов должно быть положительным!")
+		return 0, 0, ErrZeroSteps
 	}
 
-	durationStr := parts[1]
-	duration, err := time.ParseDuration(durationStr)
+	totalTime, err := time.ParseDuration(dataSlice[1])
 	if err != nil {
-		return 0, 0, fmt.Errorf("Не удалось преобразовать продолжительность! %w", err)
+		return 0, 0, err
+	}
+	if totalTime <= 0 {
+		return 0, 0, ErrZeroDuration
 	}
 
-	return steps, duration, nil
+	return steps, totalTime, nil
 }
 
 func DayActionInfo(data string, weight, height float64) string {
 	steps, duration, err := parsePackage(data)
+
 	if err != nil {
-		fmt.Println("Ошибка!", err)
+		log.Println(err)
 		return ""
 	}
 
 	if steps <= 0 {
+		log.Println(ErrZeroSteps)
 		return ""
 	}
 
-	distanceMeters := float64(steps) * stepLength
-
-	distanceKm := distanceMeters / mInKm
+	pathLength := float64(steps) * stepLength
+	pathKilometers := pathLength / mInKm
 
 	calories, err := spentcalories.WalkingSpentCalories(steps, weight, height, duration)
 	if err != nil {
-		fmt.Println("Ошибка расчёта калорий!", err)
+		log.Println(err)
 		return ""
 	}
 
-	return fmt.Sprintf(
-		"Количество шагов: %d. Дистанция составила %.2f км. Вы сожгли %.2f ккал.",
-		steps,
-		distanceKm,
-		calories,
-	)
+	result := ""
+
+	result += fmt.Sprintf("Количество шагов: %v.\n", steps)
+	result += fmt.Sprintf("Дистанция составила %.2f км.\n", pathKilometers)
+	result += fmt.Sprintf("Вы сожгли %.2f ккал.\n", calories)
+
+	return result
 }
